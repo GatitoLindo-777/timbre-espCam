@@ -1,7 +1,7 @@
-// credenciales de wifi
 
-
-// Incluimos las librerias
+String BOTtoken = "6068641172:AAF_9siLYwZ-JFoX51Evfuh9RXk-jSB9UlI";  // Remplazar por el BotToken
+String CHAT_ID = "5388508527"; // Remplazar por el ID del usuario
+// inclimos librerias
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -11,27 +11,35 @@
 #include <UniversalTelegramBot.h>
 #include <ArduinoJson.h>
 
-// Configuramos red wifi
-const char* ssid = "BJ2 2.4Ghz"; // Remplazar por el nombre de la red wifi
-const char* password = "Benitojuarez"; // Remplazar por la clave del wifi
+// inicializamos el wifi
+const char* ssid = "REMPLAZAR CON LA RED WIFI";
+const char* password = "REMPLAZAR CON LA CONTRASEÑA DEL WIFI";
 
-// Inicializamos el BOT
-String BOTtoken = "6068641172:AAF_9siLYwZ-JFoX51Evfuh9RXk-jSB9UlI";  // Remplazar por el BotToken
-String CHAT_ID = "5388508527"; // Remplazar por el ID del usuario
-
-bool sendPhoto = false;
+// inicializamos el BOT de telegram
+String BOTtoken = "XXXXXXXXXX:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";  // Remplazar con el BOT TOKEN
+String CHAT_ID = "XXXXXXXXXX"; // Remplazar con el chatID del usuario
 
 WiFiClientSecure clientTCP;
 UniversalTelegramBot bot(BOTtoken, clientTCP);
 
- #define BUTTON_PIN 4
- //bool flashState = LOW;
+// setemas las variables para la maquina de estado de antirrebote del boton
 
-//Checks for new messages every 1 second.
-int botRequestDelay = 1000;
-unsigned long lastTimeBotRan;
+#define BUTTON_PIN 5
+int butonState;
+#define BUTTON_STATE_READ 0
+#define BUTTON_STATE_CHECK 1
+#define BUTTON_STATE_REALEASE 2
+#define BUTTON_PRESSED 0
+#define BUTTON_NOT_PRESSED 1
+#define YES_PRESSED 0
+#define NOT_PRESSED 1
 
-// Seteamos los pines del CAMERA_MODEL_AI_THINKER
+// VAriables para el timbre
+#define DOORBELL_PIN 6
+bool buttonFlag;
+int doorbellTimer;
+
+//CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -50,53 +58,7 @@ unsigned long lastTimeBotRan;
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-void setup(){
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); 
-  // Init Serial Monitor
-  Serial.begin(9600);
-
-  // Seteamos el boton como input
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-
-  // Config and init the camera
-  configInitCamera();
-
-  // Connect to Wi-Fi
-  WiFi.mode(WIFI_STA);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
-  clientTCP.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
-  }
-  Serial.println();
-  Serial.print("ESP32-CAM IP Address: ");
-  Serial.println(WiFi.localIP()); 
-}
-
-void loop() {
-  if (digitalRead(BUTTON_PIN == 0) {
-    Serial.println("Preparing photo");
-    sendPhotoTelegram(); 
-    delay(1000); // REMPLAZAR CON ANTIRREBOT (NO SEAS UN HDP @YO)
-  }
-
-  // Si queremos leer mensajes incluimos esta seccion para que leea ca el tiempo seteado
-  /*if (millis() > lastTimeBotRan + botRequestDelay)  {
-    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    while (numNewMessages) {
-      Serial.println("got response");
-      handleNewMessages(numNewMessages);
-      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    }
-    lastTimeBotRan = millis();
-  }*/
-}
-
-// Funcion para configurar la camara e inicializarla
+//funcion que inicializa la camara
 void configInitCamera(){
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -121,21 +83,20 @@ void configInitCamera(){
   config.pixel_format = PIXFORMAT_JPEG;
 
   //init with high specs to pre-allocate larger buffers
-  // SI la camara lo permite la inicialisamos con caracteristicas altas
   if(psramFound()){
     config.frame_size = FRAMESIZE_UXGA;
-    config.jpeg_quality = 10;  //0-63 cuanto menor el numero mayor calidad de la camara
+    config.jpeg_quality = 10;  //0-63 lower number means higher quality
     config.fb_count = 2;
-  } else { 
+  } else {
     config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 12;  //0-63 cuanto menor el numero mayor calidad de la camara
+    config.jpeg_quality = 12;  //0-63 lower number means higher quality
     config.fb_count = 1;
   }
   
-  // Inizialisacion de la camara
+  // camera init
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("Camera init failed ", err);
+    Serial.printf("Camera init failed with error 0x%x", err);
     delay(1000);
     ESP.restart();
   }
@@ -146,32 +107,7 @@ void configInitCamera(){
 }
 
 
-// Recibimos los nuebos mensajes
-void handleNewMessages(int numNewMessages) {
-  Serial.print("Handle New Messages: ");
-  Serial.println(numNewMessages);
-
-  for (int i = 0; i < numNewMessages; i++) {
-    String chat_id = String(bot.messages[i].chat_id);
-    if (chat_id != CHAT_ID){
-      bot.sendMessage(chat_id, "Unauthorized user", "");
-      continue;
-    }
-    
-    // Print the received message
-    String text = bot.messages[i].text;
-    Serial.println(text); // Guardamos el mensaje en la variable "text"
-    
-    String from_name = bot.messages[i].from_name;
-    if (text == "/start") {
-      String welcome = "Welcome , " + from_name + "\n";
-      //welcome += "Use the following commands to interact with the ESP32-CAM \n";
-      // Si desemaos que nuestro programa haga algo con mensajes recibidos los podemos incluir aqui
-      bot.sendMessage(CHAT_ID, welcome, "");
-    }
-}
-
-// Funcion que se encarga de enviarle la foto al BOT
+// Funcion para mandar la foto a telegram
 String sendPhotoTelegram() {
   const char* myDomain = "api.telegram.org";
   String getAll = "";
@@ -252,3 +188,78 @@ String sendPhotoTelegram() {
   }
   return getBody;
 }
+
+void setup(){
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); 
+  // Init Serial Monitor
+  Serial.begin(9600);
+
+  // Configuracion del boton y el timbre
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(DOORBELL_PIN, OUTPUT);
+
+  // Config e init de la camara
+  configInitCamera();
+
+  // Conectamos el Wi-Fi
+  WiFi.mode(WIFI_STA);
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  clientTCP.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.print("ESP32-CAM IP Address: ");
+  Serial.println(WiFi.localIP()); 
+}
+
+void loop() {
+  readButtonState(); // Leemos el boton
+  if (buttonFlag == BUTTON_PRESSED) { //si esta presionado mandamos la foto  y hacemos sonar el timbre
+    Serial.println("Preparing photo");
+    sendPhotoTelegram(); 
+    doorbellTimer = millis();
+    ringDoorbell();
+    buttonFlag = BUTTON_NOT_PRESSED;
+  }
+}
+
+//maquina de estado antirrebote del boton
+void readButtonState(){
+  switch (buttonState){
+    case BUTTON_STATE_READ:
+      if (digitalRead(BUTTON_PIN == YES_PRESSED){
+        buttonState = BUTTON_STATE_CHECK
+        actualTime = millis();   
+      }
+      break;
+    case :
+      buttonTimer = millis() - actualTime;
+      if (digitalRead(BUTTON_PIN) == YES_PRESSED && buttonTimer >= 200){ //queremos quue el boton alla estado presionado por 200ms
+        buttonState = BUTTON_STATE_REALEASE;
+      }
+      if (digitalRead(BUTTON_PIN) == NOT_PRESSED && buttonTimer >= 200){
+        buttonState = BUTTON_STATE_READ;
+      }
+      break;
+     case BUTTON_STATE_REALEASE:
+      if (digitalRead(BUTTON_PIN) == NOT_PRESSED){
+        buttonFlag = BUTTON_PRESSED;
+        buttonState = BUTTON_STATE_READ;
+      }
+      break;
+  }
+}
+
+// hacemos sonar l timbre por medio segundo
+void ringDoorbell();
+  if (millis() - doorbellTimer < 500){
+    digitalWrite(DOORBELL_PIN, HIGH);
+  }
+  if (millis() - doorbellTimer > 500){
+    digitalWrite(DOORBELL_PIN, LOW);
+  }
