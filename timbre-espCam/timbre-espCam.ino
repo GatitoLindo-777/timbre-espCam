@@ -1,6 +1,6 @@
 
-String BOTtoken = "6068641172:AAF_9siLYwZ-JFoX51Evfuh9RXk-jSB9UlI";  // Remplazar por el BotToken
-String CHAT_ID = "5388508527"; // Remplazar por el ID del usuario
+//String BOTtoken = "6068641172:AAF_9siLYwZ-JFoX51Evfuh9RXk-jSB9UlI";  // Remplazar por el BotToken
+//String CHAT_ID = "5388508527"; // Remplazar por el ID del usuario
 // inclimos librerias
 #include <Arduino.h>
 #include <WiFi.h>
@@ -12,20 +12,20 @@ String CHAT_ID = "5388508527"; // Remplazar por el ID del usuario
 #include <ArduinoJson.h>
 
 // inicializamos el wifi
-const char* ssid = "REMPLAZAR CON LA RED WIFI";
-const char* password = "REMPLAZAR CON LA CONTRASEÑA DEL WIFI";
+const char* ssid = "BJ2 5.8Ghz";
+const char* password = "Benitojuarez";
 
 // inicializamos el BOT de telegram
-String BOTtoken = "XXXXXXXXXX:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";  // Remplazar con el BOT TOKEN
-String CHAT_ID = "XXXXXXXXXX"; // Remplazar con el chatID del usuario
+String BOTtoken = "6068641172:AAF_9siLYwZ-JFoX51Evfuh9RXk-jSB9UlI";  // Remplazar con el BOT TOKEN
+String CHAT_ID = "5388508527"; // Remplazar con el chatID del usuario
 
 WiFiClientSecure clientTCP;
 UniversalTelegramBot bot(BOTtoken, clientTCP);
 
 // setemas las variables para la maquina de estado de antirrebote del boton
 
-#define BUTTON_PIN 5
-int butonState;
+#define BUTTON_PIN 14
+int buttonState;
 #define BUTTON_STATE_READ 0
 #define BUTTON_STATE_CHECK 1
 #define BUTTON_STATE_REALEASE 2
@@ -38,6 +38,8 @@ int butonState;
 #define DOORBELL_PIN 6
 bool buttonFlag;
 int doorbellTimer;
+int actualTime;
+int buttonTimer;
 
 //CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM     32
@@ -180,7 +182,7 @@ String sendPhotoTelegram() {
       if (getBody.length()>0) break;
     }
     clientTCP.stop();
-    Serial.println(getBody);
+    //Serial.println(getBody);
   }
   else {
     getBody="Connected to api.telegram.org failed.";
@@ -192,10 +194,10 @@ String sendPhotoTelegram() {
 void setup(){
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); 
   // Init Serial Monitor
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // Configuracion del boton y el timbre
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_PIN, INPUT);
   pinMode(DOORBELL_PIN, OUTPUT);
 
   // Config e init de la camara
@@ -218,26 +220,31 @@ void setup(){
 }
 
 void loop() {
-  readButtonState(); // Leemos el boton
+  /*readButtonState(); // Leemos el boton
   if (buttonFlag == BUTTON_PRESSED) { //si esta presionado mandamos la foto  y hacemos sonar el timbre
     Serial.println("Preparing photo");
     sendPhotoTelegram(); 
-    doorbellTimer = millis();
-    ringDoorbell();
+    //doorbellTimer = millis();
+    //ringDoorbell();
     buttonFlag = BUTTON_NOT_PRESSED;
+  }*/
+  if (digitalRead(BUTTON_PIN == 0)){
+    Serial.println("Preparing photo");
+    sendPhotoTelegram(); 
   }
+  Serial.println(digitalRead(BUTTON_PIN));
 }
 
 //maquina de estado antirrebote del boton
 void readButtonState(){
   switch (buttonState){
     case BUTTON_STATE_READ:
-      if (digitalRead(BUTTON_PIN == YES_PRESSED){
-        buttonState = BUTTON_STATE_CHECK
+      if (digitalRead(BUTTON_PIN == YES_PRESSED)){
+        buttonState = BUTTON_STATE_CHECK;
         actualTime = millis();   
       }
       break;
-    case :
+    case BUTTON_STATE_CHECK:
       buttonTimer = millis() - actualTime;
       if (digitalRead(BUTTON_PIN) == YES_PRESSED && buttonTimer >= 200){ //queremos quue el boton alla estado presionado por 200ms
         buttonState = BUTTON_STATE_REALEASE;
@@ -256,10 +263,10 @@ void readButtonState(){
 }
 
 // hacemos sonar l timbre por medio segundo
-void ringDoorbell();
+void ringDoorbell(){
   if (millis() - doorbellTimer < 500){
     digitalWrite(DOORBELL_PIN, HIGH);
-  }
-  if (millis() - doorbellTimer > 500){
+  }else if (millis() - doorbellTimer > 500){
     digitalWrite(DOORBELL_PIN, LOW);
   }
+}
